@@ -1,0 +1,63 @@
+{
+  "name": "@lashprotocol/lash",
+  "version": "0.1.0",
+  "description": "Tiny Lash-over-MCP convention helpers for TypeScript.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist/index.js",
+    "dist/index.d.ts",
+    "dist/index.test.js",
+    "dist/lean-peer-review.js",
+    "README.md",
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
+    "docs",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test dist/*.test.js",
+    "demo": "npm run build && node dist/lean-peer-review.js",
+    "check": "npm run build && npm test",
+    "prepack": "npm run build"
+  },
+  "keywords": [
+    "mcp",
+    "agents",
+    "peer-to-peer",
+    "json-schema"
+  ],
+  "author": "Union Street Labs",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "packageManager": "npm@11.12.1",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/UnionStreetAI/lash-ts.git"
+  },
+  "homepage": "https://github.com/UnionStreetAI/lash-ts#readme",
+  "bugs": {
+    "url": "https://github.com/UnionStreetAI/lash-ts/issues"
+  },
+  "dependencies": {
+    "ajv": "^8.17.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.6.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

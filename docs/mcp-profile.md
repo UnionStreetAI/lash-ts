@@ -1,0 +1,152 @@
+# Lash MCP Profile
+
+Lash is an MCP peer profile, not a replacement transport. The adoption-friendly
+shape is:
+
+- each agent exposes its Lash methods as MCP tools;
+- each agent may also connect to peer MCP servers as a client;
+- peer symmetry comes from topology, not a new MCP message type;
+- continuations are returned as structured MCP tool results, so the next call is
+  mechanical and schema-visible.
+
+The profile deliberately borrows MCP plumbing: lifecycle, stdio/HTTP transports,
+authorization, `tools/list`, `tools/call`, progress notifications, and existing
+inspectors can remain MCP-owned. Lash owns only the method manifest discipline,
+trace discipline, continuation contract, and the peer pattern.
+
+Language packages are intentionally thin wrappers over official MCP SDKs, not
+new SDK stacks. See [language-packages.md](language-packages.md) for the
+package split and rollout plan.
+
+## Method Mapping
+
+`tools/list` returns one MCP tool per Lash method:
+
+- `name` is the Lash method name.
+- `description` is the Lash method description.
+- `inputSchema` is the Lash `params_schema`.
+- `outputSchema` is a Lash profile envelope schema.
+- `_meta.io.lashprotocol` carries the exact Lash result schema, optional partial
+  schema, declared custom error codes, and profile version.
+
+The built-in native `__manifest__` method is not exposed as an MCP tool because
+MCP already has `tools/list`.
+
+## Call Mapping
+
+`tools/call` maps to a Lash request:
+
+- MCP `params.name` becomes the Lash `method`.
+- MCP `params.arguments` becomes Lash `params`.
+- the adapter supplies `from` from the authenticated peer context;
+- the adapter supplies `trace` from the session/request context.
+
+The MCP response uses normal `CallToolResult` fields:
+
+```json
+{
+  "content": [{ "type": "text", "text": "{...same JSON as structuredContent...}" }],
+  "structuredContent": {
+    "kind": "continuation",
+    "from": "orchestrator",
+    "trace": "trace-001",
+    "continuation": {
+      "method": "provide_review_rationale",
+      "params_hint": { "segment_id": "seg-db" }
+    }
+  },
+  "isError": false
+}
+```
+
+The `kind` field is the decision point:
+
+- `result`: `value` is the successful Lash result.
+- `continuation`: call `continuation.method` next, using `params_hint` as an
+  advisory prefill.
+- `stream`: `partials` contains buffered partials and `value` contains the final
+  result. A production MCP transport should map native stream partials to MCP
+  progress notifications when available.
+- `error`: `error` is the Lash/JSON-RPC error and `isError` is true.
+
+## Thread Binding
+
+Lash-over-MCP separates three ideas:
+
+- MCP connection/session: transport plumbing.
+- Lash `trace`: the distributed conversation ID.
+- Lash `thread`: the receiver's advisory memory/session address.
+
+Every `tools/call` argument object in the live profile carries:
+
+```json
+{
+  "thread": {
+    "id": "review/protocol-core-and-agent-ergonomics",
+    "resume": "resume_or_create",
+    "summary": "Review Lash MCP profile and protocol implementation across worker peers.",
+    "turn": 1
+  }
+}
+```
+
+The receiver validates this object and binds it locally as
+`(trace, thread.id, receiver_node_id)`. In a production Hermes/OpenClaw runtime,
+this is where the peer would resume or create its local agent chat/work session,
+compact that session when needed, and wake it again on later calls with the same
+thread.
+
+The sender can request a thread, but the receiving runtime still owns its memory
+and compaction policy.
+
+## What MCP Does Not Replace
+
+MCP sampling and elicitation are useful, but they are not generic peer RPC.
+MCP requires server-to-client requests such as sampling or elicitation to be
+associated with an originating client request, so standalone peer initiation
+still comes from paired sessions: A connects to B, and B connects to A.
+
+That is the Lash pattern: symmetric peers, MCP-shaped surfaces.
+
+## Local Check
+
+Run the profile example:
+
+```sh
+npm run demo
+```
+
+It prints `tools/list`, a `tools/call` that returns a mechanical continuation,
+and a follow-up `tools/call` that completes with `kind: "result"`.
+
+## Peer Review Demos
+
+The reusable TypeScript convention layer lives in `src/index.ts`. It owns only Lash
+metadata helpers, thread schemas, continuation/result envelopes, and structured
+tool-result helpers. It does not own servers, clients, auth, process
+supervision, or durable execution.
+
+Install it for local use:
+
+```sh
+npm install
+```
+
+Run the lean demo:
+
+```sh
+npm run demo
+```
+
+Both model the desired flow:
+
+- `master` calls `orch.request_review`.
+- `orch` calls `work-1.review_segment` and `work-2.review_segment`.
+- `work-2` returns a `continuation`; `orch` follows it mechanically.
+- findings flow up to `orch`;
+- `orch` decides whether the result deserves a user-facing opinion;
+- if yes, `orch` calls `master.deliver_review_opinion`.
+
+The lean demo uses direct function calls so the contract is easy to read. The
+output is MCP-shaped `CallToolResult.structuredContent` generated by
+`callToolResult`.
